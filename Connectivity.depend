@@ -1,0 +1,50 @@
+# depslib dependency file v1.0
+1568138918 source:/home/kontron/thething.io/Connectivity/src/mqtt.c
+	<mqtt.h>
+
+1566826164 /home/kontron/thething.io/Connectivity/include/mqtt.h
+	<mqtt_pal.h>
+
+1566826164 /home/kontron/thething.io/Connectivity/include/mqtt_pal.h
+	<limits.h>
+	<string.h>
+	<stdarg.h>
+	<time.h>
+	<arpa/inet.h>
+	<pthread.h>
+	<openssl/bio.h>
+
+1566826164 source:/home/kontron/thething.io/Connectivity/src/mqtt_pal.c
+	<mqtt.h>
+	<openssl/bio.h>
+	<openssl/ssl.h>
+	<openssl/err.h>
+	<errno.h>
+
+1573345558 source:/home/kontron/thething.io/Connectivity/src/simple_subscriber.c
+	<unistd.h>
+	<stdlib.h>
+	<stdio.h>
+	<signal.h>
+	<mqtt.h>
+	<posix_sockets.h>
+	<parse.h>
+
+1566826164 /home/kontron/thething.io/Connectivity/include/posix_sockets.h
+	<stdio.h>
+	<sys/types.h>
+	<sys/socket.h>
+	<netdb.h>
+	<fcntl.h>
+
+1573343981 /home/kontron/thething.io/Connectivity/include/parse.h
+
+1573427602 source:/home/kontron/thething.io/Connectivity/src/parse.c
+	<unistd.h>
+	<stdlib.h>
+	<stdio.h>
+	<time.h>
+	<string.h>
+	<mqtt.h>
+	<parse.h>
+
