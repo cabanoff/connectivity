@@ -12,6 +12,7 @@
 #include <posix_sockets.h>
 #include <parse.h>
 
+#define VERSION "1.300"
 #define TOPIC_IN "mqtt-kontron/lora-gatway"
 #define ADDR_IN  "localhost"
 /**
@@ -22,7 +23,8 @@
 //#define ADDR_OUT "localhost"
 //#define TOPIC_OUT "connectivity/test"
 #define ADDR_OUT "mqtt.thethings.io"
-#define TOPIC_OUT "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
+//#define TOPIC_OUT "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
+#define TOPIC_OUT "v2/things/1ZtGJvaiCCoVbvlliX16R7tDwh1FxYnQfQgcySsam34"
 
 #define CONN_PERIOD_SEC 60
 
@@ -152,7 +154,7 @@ int main(int argc, const char *argv[])
 
     /* subscribe */
     mqtt_subscribe(&clientIn, topicIn, 0);
-
+    printf("Calculate connectivity software v%s\n", VERSION);
     printf("%s listening for '%s' messages.\n", argv[0], topicIn);
 
     /* configure signal handling */
