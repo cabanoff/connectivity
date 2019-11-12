@@ -101,7 +101,7 @@ void parse_make_message(void)
     int connectedDev = 0;
     int recMessages = 0;
     for(int i = 0; i < DEV_NUM; i++){
-        if(sensorMess[messCounter].lastMess[i] - sensorMess[messCounter].firstMess[i]){
+        if((sensorMess[messCounter].lastMess[i] - sensorMess[messCounter].firstMess[i])>0){
 /**deb section **************************************/
             debFirstMess[i] = sensorMess[messCounter].firstMess[i];
             debLastMess[i] = sensorMess[messCounter].lastMess[i];
