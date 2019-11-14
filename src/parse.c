@@ -12,8 +12,8 @@
 #include <parse.h>
 //"[{\"key\":\"MartaRum\",\"value\":1,\"datetime\":\"%s\"}]"
 #define DEBUG_PUBLISH "[{\"key\":\"MartaRum\",\"value\":1}]"
-#define MAX_JSON_SIZE 200
-#define MAX_MESSAGES 200
+#define MAX_JSON_SIZE 400
+#define MAX_MESSAGES 100
 #define CURRENT sensorMess[messCounter]
 #define DEV_NUM 6
 
@@ -41,7 +41,10 @@ sensorMess_t sensorMess[MAX_MESSAGES];           //reserv memory for 200 message
 uint32_t messCounter = 0;
 uint32_t messToSend = 0;
 uint32_t devicesList[] = {1,2,3,4,5,6};   //devices for calculating connectivity
-
+int rssiValue;
+uint32_t rssiSnrCount;
+int snrValue;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 #define DEV_LIST_SIZE (sizeof(devicesList)/sizeof(uint32_t))
 
 //char* messToSend = NULL;
@@ -76,6 +79,26 @@ int getDevInfo(char*,sensorMess_t*);
  }
 
  /**
+ * @brief This is called every time when a new mqtt_RSSI message arrives
+ *
+ * @param[in] message - a new mqtt_RSSI message
+ *            size - its size
+ *
+ * @returns none
+ */
+
+ void parse_save_RSSI(const char* message, size_t size)
+ {
+    int RSSI = atoi(message);
+    int SNR = atoi(strchr(message,',')+1);
+    rssiValue += RSSI;
+    snrValue += SNR;
+    rssiSnrCount++;
+   // printf("%s\n",message);
+   // printf("RSSI = %d, SNR = %d\n",RSSI,SNR);
+ }
+
+ /**
  * @brief This is called once in period for calculating connectivity
  *
  * @param[in] none
@@ -100,6 +123,8 @@ void parse_make_message(void)
     float connectivity = 0;
     int connectedDev = 0;
     int recMessages = 0;
+    int averSNR;
+    int averRSSI;
     for(int i = 0; i < DEV_NUM; i++){
         if((sensorMess[messCounter].lastMess[i] - sensorMess[messCounter].firstMess[i])>0){
 /**deb section **************************************/
@@ -118,6 +143,15 @@ void parse_make_message(void)
     if(connectedDev)connectivity /= connectedDev;
     connectivity *= 100;
     if(connectivity > 100)connectivity = 100;   //for the first count
+
+    pthread_mutex_lock(&lock);
+    averSNR = snrValue/rssiSnrCount;
+    averRSSI = rssiValue/rssiSnrCount;
+    snrValue = 0;
+    rssiValue = 0;
+    rssiSnrCount = 0;
+    pthread_mutex_unlock(&lock);
+
     /*
     {
       "values": [
@@ -135,8 +169,11 @@ void parse_make_message(void)
     }
     */
     snprintf(sensorMess[messCounter].jsonStr,MAX_JSON_SIZE,\
-    "{\"values\":[{\"key\":\"Connectivity\",\"value\":%d,\"datatime\":\"%s\"},{\"key\":\"Messages\",\"value\":%d,\"datatime\":\"%s\"}]}",\
-    (int)connectivity, timebuf,recMessages,timebuf);
+"{\"values\":[{\"key\":\"Connectivity\",\"value\":%d,\"datatime\":\"%s\"},\
+{\"key\":\"Messages\",\"value\":%d,\"datatime\":\"%s\"},\
+{\"key\":\"RSSI\",\"value\":%d,\"datatime\":\"%s\"},\
+{\"key\":\"SNR\",\"value\":%d,\"datatime\":\"%s\"}]}",\
+    (int)connectivity, timebuf,recMessages,timebuf,averRSSI,timebuf,averSNR,timebuf);
 
     if(messCounter < (MAX_MESSAGES-1)){
         messCounter++;

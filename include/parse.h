@@ -13,6 +13,16 @@
  */
  void parse_save(const char* message, size_t size);
 
+/**
+ * @brief This is called every time when a new mqtt_RSSI message arrives
+ *
+ * @param[in] message - a new mqtt_RSSI message
+ *            size - its size
+ *
+ * @returns none
+ */
+
+ void parse_save_RSSI(const char* message, size_t size);
 
 /**
  * @brief returns first message in stack.

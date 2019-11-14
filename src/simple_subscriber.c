@@ -12,8 +12,9 @@
 #include <posix_sockets.h>
 #include <parse.h>
 
-#define VERSION "1.301"
+#define VERSION "1.401"
 #define TOPIC_IN "mqtt-kontron/lora-gatway"
+#define TOPIC_IN_RSSI "mqtt-kontron/lora-RSSI"
 #define ADDR_IN  "localhost"
 /**
   for testing with mosquitto
@@ -23,8 +24,8 @@
 //#define ADDR_OUT "localhost"
 //#define TOPIC_OUT "connectivity/test"
 #define ADDR_OUT "mqtt.thethings.io"
-//#define TOPIC_OUT "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
-#define TOPIC_OUT "v2/things/1ZtGJvaiCCoVbvlliX16R7tDwh1FxYnQfQgcySsam34"
+#define TOPIC_OUT "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
+//#define TOPIC_OUT "v2/things/1ZtGJvaiCCoVbvlliX16R7tDwh1FxYnQfQgcySsam34"
 
 #define CONN_PERIOD_SEC 600
 
@@ -41,20 +42,27 @@ int exit_sig; /* 1 -> application terminates cleanly (shut down hardware, close 
 int quit_sig; /* 1 -> application terminates without shutting down the hardware */
 
 
-struct mqtt_client clientIn, clientOut;
+struct mqtt_client clientIn, clientInRSSI, clientOut;
 uint8_t sendbufIn[2048]; /* sendbuf should be large enough to hold multiple whole mqtt messages */
 uint8_t recvbufIn[1024]; /* recvbuf should be large enough any whole mqtt message expected to be received */
+uint8_t sendbufInRSSI[2048]; /* sendbuf should be large enough to hold multiple whole mqtt messages */
+uint8_t recvbufInRSSI[1024]; /* recvbuf should be large enough any whole mqtt message expected to be received */
 uint8_t sendbufOut[2048]; /* sendbuf should be large enough to hold multiple whole mqtt messages */
 uint8_t recvbufOut[1024]; /* recvbuf should be large enough any whole mqtt message expected to be received */
-int sockfdIn;
-int sockfdOut;
+int sockfdIn = -1;
+int sockfdInRSSI = -1;
+int sockfdOut = -1;
 const char* addrIn;
 const char* addrOut;
 const char* port;
 const char* topicIn;
+const char* topicInRSSI;
 const char* topicOut;
+
 pthread_t client_daemonOut;
 pthread_t client_daemonIn;
+pthread_t client_daemonInRSSI;
+
 
 /* --- PRIVATE FUNCTIONS DECLARATION ---------------------------------------- */
 
@@ -65,6 +73,7 @@ void sig_handler(int sigio);
  */
 void publish_callback(void** unused, struct mqtt_response_publish *published);
 void subscribe_callback(void** unused, struct mqtt_response_publish *published);
+void subscribe_callback_RSSI(void** unused, struct mqtt_response_publish *published);
 //void parse_save(const char* message, size_t size);
 
 /**
@@ -81,7 +90,8 @@ int makePublisher(void);
 /**
  * @brief Safelty closes the \p sockfd and cancels the \p client_daemon before \c exit.
  */
-void exit_example(int status, int sockfdIn, int sockfdOut, pthread_t *client_daemonIn, pthread_t *client_daemonOut);
+void exit_example(int status,int sockfdIn,int sockfdInRSSI,int sockfdOut,\
+                pthread_t *client_daemonIn, pthread_t *client_daemonInRSSI, pthread_t *client_daemonOut);
 
 int main(int argc, const char *argv[])
 {
@@ -127,14 +137,15 @@ int main(int argc, const char *argv[])
         topicOut = TOPIC_OUT;
     }
 
-
+    topicInRSSI = TOPIC_IN_RSSI;
     /* open the non-blocking TCP socket (connecting to the broker) */
     sockfdIn = open_nb_socket(addrIn, port);
 
     if(sockfdIn == -1){
         perror("Failed to open input socket: ");
-        exit_example(EXIT_FAILURE, sockfdIn, sockfdOut, NULL, NULL);
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
     }
+
 
     mqtt_init(&clientIn, sockfdIn, sendbufIn, sizeof(sendbufIn), recvbufIn, sizeof(recvbufIn), subscribe_callback);
     mqtt_connect(&clientIn, "subscribing_client", NULL, NULL, 0, NULL, NULL, 0, 400);
@@ -142,20 +153,47 @@ int main(int argc, const char *argv[])
     /* check that we don't have any errors */
     if (clientIn.error != MQTT_OK) {
         fprintf(stderr, "connect subscriber error: %s\n", mqtt_error_str(clientIn.error));
-        exit_example(EXIT_FAILURE, sockfdIn,sockfdOut,NULL, NULL);
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
     }
 
     /* start a thread to refresh the subscriber client (handle egress and ingree client traffic) */
 
     if(pthread_create(&client_daemonIn, NULL, subscribe_client_refresher, &clientIn)) {
         fprintf(stderr, "Failed to start subscriber client daemon.\n");
-        exit_example(EXIT_FAILURE, sockfdIn, sockfdOut,NULL, NULL);
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
     }
 
     /* subscribe */
     mqtt_subscribe(&clientIn, topicIn, 0);
+
+    /* open the non-blocking TCP socket (connecting to the broker) for RSSI */
+    sockfdInRSSI = open_nb_socket(addrIn, port);
+    if(sockfdInRSSI == -1){
+        perror("Failed to open input RSSI socket: ");
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
+    }
+
+    mqtt_init(&clientInRSSI, sockfdInRSSI, sendbufInRSSI, sizeof(sendbufInRSSI), recvbufInRSSI, sizeof(recvbufInRSSI), subscribe_callback_RSSI);
+    mqtt_connect(&clientInRSSI, "subscribing_client_RSSI", NULL, NULL, 0, NULL, NULL, 0, 400);
+
+    /* check that we don't have any errors */
+    if (clientInRSSI.error != MQTT_OK) {
+        fprintf(stderr, "connect subscriber RSSI error: %s\n", mqtt_error_str(clientInRSSI.error));
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
+    }
+
+    /* start a thread to refresh the subscriber client (handle egress and ingree client traffic) */
+
+    if(pthread_create(&client_daemonInRSSI, NULL, subscribe_client_refresher, &clientInRSSI)) {
+        fprintf(stderr, "Failed to start subscriber RSSI client daemon.\n");
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
+    }
+
+    /* subscribe */
+    mqtt_subscribe(&clientInRSSI, topicInRSSI, 0);
+
     printf("Calculate connectivity software v%s\n", VERSION);
-    printf("%s listening for '%s' messages.\n", argv[0], topicIn);
+    printf("%s listening for '%s' and '%s' messages.\n", argv[0], topicIn, topicInRSSI);
 
     /* configure signal handling */
 	sigemptyset(&sigact.sa_mask);
@@ -189,12 +227,12 @@ int main(int argc, const char *argv[])
             }
             if(sent_ok != 0){
                 parse_next_mess();
-                if (sockfdOut != -1) close(sockfdOut);  //close publisher
             }else{
                 fprintf(stderr, "publisher error: %s\n", mqtt_error_str(clientOut.error));
                 printf("publisher error: %s\n", mqtt_error_str(clientOut.error));
                 usleep(1000000U);
             }
+            if (sockfdOut != -1) close(sockfdOut);  //close publisher
         }
 
         //usleep(100000);
@@ -207,7 +245,7 @@ int main(int argc, const char *argv[])
 
     /* exit */
     //exit_example(EXIT_SUCCESS, sockfdIn, sockfdOut, &client_daemonIn, &client_daemonOut);
-    exit_example(EXIT_SUCCESS, sockfdIn, sockfdOut, &client_daemonIn, NULL);
+    exit_example(EXIT_SUCCESS,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
 }
 
 /* --- PRIVATE FUNCTIONS DEFINITION ----------------------------------------- */
@@ -251,11 +289,13 @@ void sig_handler(int sigio) {
 		exit_sig = 1;
 	}
 }
-void exit_example(int status, int sockfdIn, int sockfdOut, pthread_t *client_daemonIn, pthread_t *client_daemonOut)
+void exit_example(int status,int sockfdIn,int sockfdInRSSI,int sockfdOut, pthread_t *client_daemonIn, pthread_t *client_daemonInRSSI, pthread_t *client_daemonOut)
 {
     if (sockfdIn != -1) close(sockfdIn);
+    if (sockfdInRSSI != -1) close(sockfdInRSSI);
     if (sockfdOut != -1) close(sockfdOut);
     if (client_daemonIn != NULL) pthread_cancel(*client_daemonIn);
+    if (client_daemonInRSSI != NULL) pthread_cancel(*client_daemonInRSSI);
     if (client_daemonOut != NULL) pthread_cancel(*client_daemonOut);
     exit(status);
 }
@@ -277,11 +317,30 @@ void subscribe_callback(void** unused, struct mqtt_response_publish *published)
     /*save only 32 bytes message, for example:
     2019-11-08 18:49:04.413Z,02000000BF070000000000000000000000000000000000000000000000000000 - 89 chars
     */
+
     if(published->application_message_size == 89)parse_save((const char*) published->application_message,published->application_message_size);
 
     //printf("Received publish from '%s' : %s\n", topic_name, (const char*) published->application_message);
 
     free(topic_name);
+}
+
+void subscribe_callback_RSSI(void** unused, struct mqtt_response_publish *published)
+{
+    /* note that published->topic_name is NOT null-terminated (here we'll change it to a c-string) */
+    char* inMessage = (char*) malloc(published->application_message_size + 1);
+    memcpy(inMessage, published->application_message, published->application_message_size);
+    inMessage[published->application_message_size] = '\0';
+
+    /*save only 32 bytes message, for example:
+    2019-11-08 18:49:04.413Z,02000000BF070000000000000000000000000000000000000000000000000000 - 89 chars
+    */
+
+    parse_save_RSSI((const char*) inMessage,published->application_message_size+1);
+
+    //printf("Received publish from '%s' : %s\n", topic_name, (const char*) published->application_message);
+
+    free(inMessage);
 }
 
 void* publish_client_refresher(void* client)
