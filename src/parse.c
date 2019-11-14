@@ -149,6 +149,10 @@ void parse_make_message(void)
         averSNR = snrValue/rssiSnrCount;
         averRSSI = rssiValue/rssiSnrCount;
     }
+    else{
+        averSNR = 0;
+        averRSSI = 0;
+    }
     snrValue = 0;
     rssiValue = 0;
     rssiSnrCount = 0;
