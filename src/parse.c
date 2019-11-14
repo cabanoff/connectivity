@@ -145,8 +145,10 @@ void parse_make_message(void)
     if(connectivity > 100)connectivity = 100;   //for the first count
 
     pthread_mutex_lock(&lock);
-    averSNR = snrValue/rssiSnrCount;
-    averRSSI = rssiValue/rssiSnrCount;
+    if(rssiSnrCount){
+        averSNR = snrValue/rssiSnrCount;
+        averRSSI = rssiValue/rssiSnrCount;
+    }
     snrValue = 0;
     rssiValue = 0;
     rssiSnrCount = 0;
@@ -178,11 +180,13 @@ void parse_make_message(void)
     if(messCounter < (MAX_MESSAGES-1)){
         messCounter++;
         /*prepare for next period*/
+        pthread_mutex_lock(&lock);
         for(int i = 0; i < DEV_NUM; i++){
             sensorMess[messCounter].firstMess[i] = sensorMess[messCounter-1].lastMess[i];
             sensorMess[messCounter].lastMess[i] = sensorMess[messCounter-1].lastMess[i];
             sensorMess[messCounter].numMess[i] = 0;
         }
+        pthread_mutex_unlock(&lock);
     }else messCounter = 0;
     if(messCounter == messToSend)parse_next_mess();   //we've lost one message
     //printf("Message made, messCounter = %d, messToSend = %d\n",messCounter, messToSend);
