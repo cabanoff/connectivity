@@ -12,7 +12,7 @@
 #include <posix_sockets.h>
 #include <parse.h>
 
-#define VERSION "1.402"
+#define VERSION "1.500"
 #define TOPIC_IN "mqtt-kontron/lora-gatway"
 #define TOPIC_IN_RSSI "mqtt-kontron/lora-RSSI"
 #define ADDR_IN  "localhost"
@@ -25,9 +25,12 @@
 //#define TOPIC_OUT "connectivity/test"
 #define ADDR_OUT "mqtt.thethings.io"
 /*kontron*/
-#define TOPIC_OUT "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
+#define TOPIC_OUT2 "v2/things/LCJzGT3QL6jucKuFcuTyBbvQzYIMunWvHUK1ZKDdfuQ"
 /*raspberry pi*/
-//#define TOPIC_OUT "v2/things/1ZtGJvaiCCoVbvlliX16R7tDwh1FxYnQfQgcySsam34"
+#define TOPIC_OUT1 "v2/things/1ZtGJvaiCCoVbvlliX16R7tDwh1FxYnQfQgcySsam34"
+/*GTW410-L*/
+#define TOPIC_OUT3 "v2/things/GfPq9BoJgm73pGrynXafogS_6kzVBo2wWnmzGCKr4J0"
+
 
 #define CONN_PERIOD_SEC 600
 
@@ -102,42 +105,47 @@ int main(int argc, const char *argv[])
     exit_sig = 0;
     quit_sig = 0;
 
+    addrIn = ADDR_IN;
+    port = "1883";
+    topicIn = TOPIC_IN;
+    addrOut = ADDR_OUT;
+
+
+
+    if (argc > 1) {
+        switch ((uint8_t)strtol(argv[1], NULL, 10)){
+            case 1:
+            topicOut = TOPIC_OUT1;
+            printf("Launched on Raspberry Pi\n");
+            break;
+            case 2:
+            topicOut = TOPIC_OUT2;
+            printf("Launched on Kontron\n");
+            break;
+            case 3:
+            topicOut = TOPIC_OUT3;
+            printf("Launched on GTW410-L\n");
+            break;
+            default:
+            printf("argument should be 1 - 3\n");
+            exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
+        }
+    } else {
+        printf("you should call this file with argument 1 - 3\n");
+        printf("1 - RaspberryPi BS \n");
+        printf("2 - Kontron BS \n");
+        printf("3 - GTW410-L BS \n");
+        exit_example(EXIT_FAILURE,sockfdIn,sockfdInRSSI,sockfdOut,&client_daemonIn,&client_daemonInRSSI,&client_daemonOut);
+    }
     /* get address (argv[1] if present) */
+    /*
     if (argc > 1) {
         addrIn = argv[1];
     } else {
         addrIn = ADDR_IN;
-        //addr = "test.mosquitto.org";
-        //deb = 1;
     }
+    */
 
-    /* get port number (argv[2] if present) */
-    if (argc > 2) {
-        port = argv[2];
-    } else {
-        port = "1883";
-    }
-
-    /* get the topic name to subscribe */
-    if (argc > 3) {
-        topicIn = argv[3];
-    } else {
-        topicIn = TOPIC_IN;
-    }
-
-    /*get addres to publish if present*/
-    if (argc > 4) {
-        addrOut = argv[4];
-    } else {
-        addrOut = ADDR_OUT;
-    }
-
-    /*get the topic name to publish if present*/
-    if (argc > 5) {
-        topicOut = argv[5];
-    } else {
-        topicOut = TOPIC_OUT;
-    }
 
     topicInRSSI = TOPIC_IN_RSSI;
     /* open the non-blocking TCP socket (connecting to the broker) */
